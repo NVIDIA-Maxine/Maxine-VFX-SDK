@@ -31,6 +31,8 @@
 #ifndef OPENCV_FLANN_LOGGER_H
 #define OPENCV_FLANN_LOGGER_H
 
+//! @cond IGNORED
+
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -99,7 +101,6 @@ public:
      * Print log message
      * @param level Log level
      * @param fmt Message format
-     * @return
      */
     static int log(int level, const char* fmt, ...)
     {
@@ -131,5 +132,7 @@ private:
 };
 
 }
+
+//! @endcond
 
 #endif //OPENCV_FLANN_LOGGER_H

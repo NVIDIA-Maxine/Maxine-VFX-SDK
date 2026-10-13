@@ -3,30 +3,40 @@
 #######################
 
 if(MSVC)
-    if(CMAKE_CL_64)
-        set(OpenCV_ARCH x64)
-    elseif((CMAKE_GENERATOR MATCHES "ARM") OR ("${arch_hint}" STREQUAL "ARM") OR (CMAKE_VS_EFFECTIVE_PLATFORMS MATCHES "ARM|arm"))
-        # see Modules/CmakeGenericSystem.cmake
-        set(OpenCV_ARCH ARM)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
+      set(OpenCV_ARCH arm64)
+      set(OpenCV_TARGET opencv4120)
+      set(OpenCV_WORLD_LIB opencv_world4120)
     else()
-        set(OpenCV_ARCH x86)
-    endif()
-    if(MSVC_VERSION GREATER_EQUAL 1920)
-        #set(OpenCV_RUNTIME vc16)
-        message("No Visual Studio 2019 OpenCV library available; trying 2017 library instead")
-        set(OpenCV_RUNTIME vc15)
-    elseif(MSVC_VERSION GREATER_EQUAL 1910)
-        set(OpenCV_RUNTIME vc15)
-    elseif(MSVC_VERSION GREATER_EQUAL 1900)
-        set(OpenCV_RUNTIME vc14)
-    else()
-        message("MSVC_VERSION ${MSVC_VERSION} is not accommodated")
+      set(OpenCV_ARCH x64)
+      set(OpenCV_TARGET opencv346)
+      set(OpenCV_WORLD_LIB opencv_world346)
     endif()
 
-    add_library(opencv346 INTERFACE)
-    set(OpenCV_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/opencv/include ${CMAKE_CURRENT_SOURCE_DIR}/opencv/include/opencv2)
-    target_include_directories(opencv346 INTERFACE ${OpenCV_INCLUDE_DIR})
-    target_link_libraries(opencv346 INTERFACE optimized ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/opencv_world346.lib)
+    set(OpenCV_ARCH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/opencv/)
+    set(OpenCV_INCLUDE_DIRS ${OpenCV_ARCH_DIR}/include ${OpenCV_ARCH_DIR}/include/opencv2)
+    set(OpenCV_LIBRARY_DIR ${OpenCV_ARCH_DIR}/lib)
+    set(OpenCV_BINARY_DIR ${OpenCV_ARCH_DIR}/bin)
+
+    if(NOT EXISTS ${OpenCV_LIBRARY_DIR}/${OpenCV_WORLD_LIB}.lib)
+      message(FATAL_ERROR "No ${OpenCV_ARCH} OpenCV found at ${OpenCV_LIBRARY_DIR}/${OpenCV_WORLD_LIB}.lib")
+    endif()
+
+    add_library(${OpenCV_TARGET} INTERFACE)
+    target_include_directories(${OpenCV_TARGET} INTERFACE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(${OpenCV_TARGET} INTERFACE
+      $<$<CONFIG:Debug>:${OpenCV_LIBRARY_DIR}/${OpenCV_WORLD_LIB}d.lib>
+      $<$<NOT:$<CONFIG:Debug>>:${OpenCV_LIBRARY_DIR}/${OpenCV_WORLD_LIB}.lib>
+    )
+    set_target_properties(${OpenCV_TARGET} PROPERTIES
+      DYNAMIC_LIBRARY_DIR "${OpenCV_BINARY_DIR}")
+
+    add_library(OpenCV INTERFACE)
+    target_link_libraries(OpenCV INTERFACE ${OpenCV_TARGET})
+    set_target_properties(OpenCV PROPERTIES
+      DYNAMIC_LIBRARY_DIR "${OpenCV_BINARY_DIR}")
+
+    message(STATUS "OpenCV (${OpenCV_ARCH}): ${OpenCV_ARCH_DIR}")
 else()
 
     find_package(OpenCV REQUIRED

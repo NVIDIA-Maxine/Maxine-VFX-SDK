@@ -31,11 +31,11 @@
 #ifndef OPENCV_FLANN_RANDOM_H
 #define OPENCV_FLANN_RANDOM_H
 
+//! @cond IGNORED
+
 #include <algorithm>
 #include <cstdlib>
 #include <vector>
-
-#include "general.h"
 
 namespace cvflann
 {
@@ -106,7 +106,6 @@ public:
     /**
      * Constructor.
      * @param n Size of the interval from which to generate
-     * @return
      */
     UniqueRandom(int n)
     {
@@ -151,5 +150,7 @@ public:
 };
 
 }
+
+//! @endcond
 
 #endif //OPENCV_FLANN_RANDOM_H

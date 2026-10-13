@@ -1,6 +1,6 @@
 /*###############################################################################
 #
-# Copyright 2020 NVIDIA Corporation
+# Copyright 2020-2026 NVIDIA Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -22,14 +22,14 @@
 ###############################################################################*/
 
 
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_MAJOR 0
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_MINOR 7
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_RELEASE 6
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_MAJOR 1
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_MINOR 3
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_RELEASE 0
 #define NVIDIA_VIDEOEFFECTS_SDK_VERSION_BUILD 0
 
 
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION 0,7,6,0
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_MAJOR_MINOR 0,7
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_STRING "0.7.6.0"
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_STRING_SHORT "0.7.6"
-#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_STRING_MAJOR_MINOR "0.7"
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION 1,3,0,0
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_MAJOR_MINOR 1,3
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_STRING "1.3.0.0"
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_STRING_SHORT "1.3.0"
+#define NVIDIA_VIDEOEFFECTS_SDK_VERSION_STRING_MAJOR_MINOR "1.3"

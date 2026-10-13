@@ -31,9 +31,12 @@
 #ifndef OPENCV_FLANN_DATASET_H_
 #define OPENCV_FLANN_DATASET_H_
 
+//! @cond IGNORED
+
 #include <stdio.h>
 
-#include "general.h"
+#include "opencv2/core/cvdef.h"
+#include "opencv2/flann/defines.h"
 
 namespace cvflann
 {
@@ -112,5 +115,7 @@ public:
 
 
 }
+
+//! @endcond
 
 #endif //OPENCV_FLANN_DATASET_H_

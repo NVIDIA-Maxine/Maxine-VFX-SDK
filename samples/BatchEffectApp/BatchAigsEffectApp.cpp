@@ -266,7 +266,11 @@ NvCV_Status BatchProcess(const char* effectName, unsigned int mode,
   BAIL_IF_ERR(err = app.init(effectName, batchSize, mode, &nvx1)); // Init effect and buffers
   BAIL_IF_ERR(err = NvVFX_SetU32(app._eff, NVVFX_MAX_NUMBER_STREAMS, numOfVideoStreams));
   BAIL_IF_ERR(err = NvVFX_SetU32(app._eff, NVVFX_MODEL_BATCH, numOfVideoStreams>1?8:1));
-  BAIL_IF_ERR(err = NvVFX_Load(app._eff));
+  err = NvVFX_Load(app._eff);
+  if (err != NVCV_SUCCESS && err != NVCV_ERR_MODELSUBSTITUTION)
+  {
+      BAIL_IF_ERR(err);
+  }
 
   // Creating state objects, one per stream.
   for (unsigned int i = 0; i < numOfVideoStreams; i++) {

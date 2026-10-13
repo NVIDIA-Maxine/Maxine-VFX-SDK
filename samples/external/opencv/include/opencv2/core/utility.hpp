@@ -56,36 +56,14 @@
 #include "opencv2/core.hpp"
 #include <ostream>
 
-#ifdef CV_CXX11
 #include <functional>
+
+#if !defined(_M_CEE)
+#include <mutex>  // std::mutex, std::lock_guard
 #endif
 
 namespace cv
 {
-
-#ifdef CV_COLLECT_IMPL_DATA
-CV_EXPORTS void setImpl(int flags); // set implementation flags and reset storage arrays
-CV_EXPORTS void addImpl(int flag, const char* func = 0); // add implementation and function name to storage arrays
-// Get stored implementation flags and functions names arrays
-// Each implementation entry correspond to function name entry, so you can find which implementation was executed in which function
-CV_EXPORTS int getImpl(std::vector<int> &impl, std::vector<String> &funName);
-
-CV_EXPORTS bool useCollection(); // return implementation collection state
-CV_EXPORTS void setUseCollection(bool flag); // set implementation collection state
-
-#define CV_IMPL_PLAIN  0x01 // native CPU OpenCV implementation
-#define CV_IMPL_OCL    0x02 // OpenCL implementation
-#define CV_IMPL_IPP    0x04 // IPP implementation
-#define CV_IMPL_MT     0x10 // multithreaded implementation
-
-#define CV_IMPL_ADD(impl)                                                   \
-    if(cv::useCollection())                                                 \
-    {                                                                       \
-        cv::addImpl(impl, CV_Func);                                         \
-    }
-#else
-#define CV_IMPL_ADD(impl)
-#endif
 
 //! @addtogroup core_utils
 //! @{
@@ -116,7 +94,11 @@ CV_EXPORTS void setUseCollection(bool flag); // set implementation collection st
  }
  \endcode
 */
+#ifdef OPENCV_ENABLE_MEMORY_SANITIZER
+template<typename _Tp, size_t fixed_size = 0> class AutoBuffer
+#else
 template<typename _Tp, size_t fixed_size = 1024/sizeof(_Tp)+8> class AutoBuffer
+#endif
 {
 public:
     typedef _Tp value_type;
@@ -194,14 +176,45 @@ extern "C" typedef int (*ErrorCallback)( int status, const char* func_name,
 */
 CV_EXPORTS ErrorCallback redirectError( ErrorCallback errCallback, void* userdata=0, void** prevUserdata=0);
 
+/** @brief Generates a unique temporary file name.
+
+This function generates a full, unique file path for a temporary file,
+which can be used to create temporary files for various purposes.
+
+@param suffix (optional) The desired file extension or suffix for the temporary file (e.g., ".png", ".txt").
+If no suffix is provided (suffix = 0), the file will not have a specific extension.
+
+@return cv::String A full unique path for the temporary file.
+
+@note
+- The function does not create the file, it only generates the name.
+- The file name is unique for the system session.
+- Works cross-platform (Windows, Linux, macOS).
+ */
 CV_EXPORTS String tempfile( const char* suffix = 0);
+
+/** @brief Searches for files matching the specified pattern in a directory.
+
+This function searches for files that match a given pattern (e.g., `*.jpg`)
+in the specified directory. The search can be limited to the directory itself
+or be recursive, including subdirectories.
+
+@param pattern The file search pattern, which can include wildcards like `*`
+(for matching multiple characters) or `?` (for matching a single character).
+
+@param result  Output vector where the file paths matching the search
+pattern will be stored.
+@param recursive (optional) Boolean flag indicating whether to search
+subdirectories recursively. If true, the search will include all subdirectories.
+The default value is `false`.
+ */
 CV_EXPORTS void glob(String pattern, std::vector<String>& result, bool recursive = false);
 
-/** @brief OpenCV will try to set the number of threads for the next parallel region.
+/** @brief OpenCV will try to set the number of threads for subsequent parallel regions.
 
-If threads == 0, OpenCV will disable threading optimizations and run all it's functions
-sequentially. Passing threads \< 0 will reset threads number to system default. This function must
-be called outside of parallel region.
+If threads == 1, OpenCV will disable threading optimizations and run all it's functions
+sequentially. Passing threads \< 0 will reset threads number to system default.
+The function is not thread-safe. It must not be called in parallel region or concurrent threads.
 
 OpenCV will try to run its functions with specified threads number, but some behaviour differs from
 framework:
@@ -302,113 +315,131 @@ CV_EXPORTS_W double getTickFrequency();
 
 The class computes passing time by counting the number of ticks per second. That is, the following code computes the
 execution time in seconds:
-@code
-TickMeter tm;
-tm.start();
-// do something ...
-tm.stop();
-std::cout << tm.getTimeSec();
-@endcode
+@snippet snippets/core_various.cpp TickMeter_total
 
 It is also possible to compute the average time over multiple runs:
-@code
-TickMeter tm;
-for (int i = 0; i < 100; i++)
-{
-    tm.start();
-    // do something ...
-    tm.stop();
-}
-double average_time = tm.getTimeSec() / tm.getCounter();
-std::cout << "Average time in second per iteration is: " << average_time << std::endl;
-@endcode
+@snippet snippets/core_various.cpp TickMeter_average
+
 @sa getTickCount, getTickFrequency
 */
-
 class CV_EXPORTS_W TickMeter
 {
 public:
     //! the default constructor
     CV_WRAP TickMeter()
     {
-    reset();
+        reset();
     }
 
-    /**
-    starts counting ticks.
-    */
+    //! starts counting ticks.
     CV_WRAP void start()
     {
-    startTime = cv::getTickCount();
+        startTime = cv::getTickCount();
     }
 
-    /**
-    stops counting ticks.
-    */
+    //! stops counting ticks.
     CV_WRAP void stop()
     {
-    int64 time = cv::getTickCount();
-    if (startTime == 0)
-    return;
-    ++counter;
-    sumTime += (time - startTime);
-    startTime = 0;
+        const int64 time = cv::getTickCount();
+        if (startTime == 0)
+            return;
+        ++counter;
+        lastTime = time - startTime;
+        sumTime += lastTime;
+        startTime = 0;
     }
 
-    /**
-    returns counted ticks.
-    */
+    //! returns counted ticks.
     CV_WRAP int64 getTimeTicks() const
     {
-    return sumTime;
+        return sumTime;
     }
 
-    /**
-    returns passed time in microseconds.
-    */
+    //! returns passed time in microseconds.
     CV_WRAP double getTimeMicro() const
     {
-    return getTimeMilli()*1e3;
+        return getTimeMilli()*1e3;
     }
 
-    /**
-    returns passed time in milliseconds.
-    */
+    //! returns passed time in milliseconds.
     CV_WRAP double getTimeMilli() const
     {
-    return getTimeSec()*1e3;
+        return getTimeSec()*1e3;
     }
 
-    /**
-    returns passed time in seconds.
-    */
-    CV_WRAP double getTimeSec()   const
+    //! returns passed time in seconds.
+    CV_WRAP double getTimeSec() const
     {
-    return (double)getTimeTicks() / getTickFrequency();
+        return (double)getTimeTicks() / getTickFrequency();
     }
 
-    /**
-    returns internal counter value.
-    */
+    //! returns counted ticks of the last iteration.
+    CV_WRAP int64 getLastTimeTicks() const
+    {
+        return lastTime;
+    }
+
+    //! returns passed time of the last iteration in microseconds.
+    CV_WRAP double getLastTimeMicro() const
+    {
+        return getLastTimeMilli()*1e3;
+    }
+
+    //! returns passed time of the last iteration in milliseconds.
+    CV_WRAP double getLastTimeMilli() const
+    {
+        return getLastTimeSec()*1e3;
+    }
+
+    //! returns passed time of the last iteration in seconds.
+    CV_WRAP double getLastTimeSec() const
+    {
+        return (double)getLastTimeTicks() / getTickFrequency();
+    }
+
+    //! returns internal counter value.
     CV_WRAP int64 getCounter() const
     {
-    return counter;
+        return counter;
     }
 
-    /**
-    resets internal values.
-    */
+    //! returns average FPS (frames per second) value.
+    CV_WRAP double getFPS() const
+    {
+        const double sec = getTimeSec();
+        if (sec < DBL_EPSILON)
+            return 0.;
+        return counter / sec;
+    }
+
+    //! returns average time in seconds
+    CV_WRAP double getAvgTimeSec() const
+    {
+        if (counter <= 0)
+            return 0.;
+        return getTimeSec() / counter;
+    }
+
+    //! returns average time in milliseconds
+    CV_WRAP double getAvgTimeMilli() const
+    {
+        return getAvgTimeSec() * 1e3;
+    }
+
+    //! resets internal values.
     CV_WRAP void reset()
     {
-    startTime = 0;
-    sumTime = 0;
-    counter = 0;
+        counter = 0;
+        sumTime = 0;
+        startTime = 0;
+        lastTime = 0;
     }
 
 private:
     int64 counter;
     int64 sumTime;
     int64 startTime;
+    int64 lastTime;
 };
 
 /** @brief output operator
@@ -467,7 +498,7 @@ Returned value is a string containing space separated list of CPU features with 
 
 Example: `SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *FP16 *AVX *AVX2 *AVX512-SKX?`
 */
-CV_EXPORTS std::string getCPUFeaturesLine();
+CV_EXPORTS_W std::string getCPUFeaturesLine();
 
 /** @brief Returns the number of logical CPUs available for the process.
  */
@@ -534,6 +565,55 @@ static inline size_t roundUp(size_t a, unsigned int b)
     return a + b - 1 - (a + b - 1) % b;
 }
 
+/** @brief Alignment check of passed values
+
+Usage: `isAligned<sizeof(int)>(...)`
+
+@note Alignment(N) must be a power of 2 (2**k, 2^k)
+*/
+template<int N, typename T> static inline
+bool isAligned(const T& data)
+{
+    CV_StaticAssert((N & (N - 1)) == 0, "");  // power of 2
+    return (((size_t)data) & (N - 1)) == 0;
+}
+/** @overload */
+template<int N> static inline
+bool isAligned(const void* p1)
+{
+    return isAligned<N>((size_t)p1);
+}
+/** @overload */
+template<int N> static inline
+bool isAligned(const void* p1, const void* p2)
+{
+    return isAligned<N>(((size_t)p1)|((size_t)p2));
+}
+/** @overload */
+template<int N> static inline
+bool isAligned(const void* p1, const void* p2, const void* p3)
+{
+    return isAligned<N>(((size_t)p1)|((size_t)p2)|((size_t)p3));
+}
+/** @overload */
+template<int N> static inline
+bool isAligned(const void* p1, const void* p2, const void* p3, const void* p4)
+{
+    return isAligned<N>(((size_t)p1)|((size_t)p2)|((size_t)p3)|((size_t)p4));
+}
+
+/*! @brief Flags that allow to midify some functions behavior. Used as set of flags.
+*/
+enum AlgorithmHint {
+    ALGO_HINT_DEFAULT = 0, //!< Default algorithm behaviour defined during OpenCV build
+    ALGO_HINT_ACCURATE = 1, //!< Use generic portable implementation
+    ALGO_HINT_APPROX = 2, //!< Allow alternative approximations to get faster implementation. Behaviour and result depends on a platform
+};
+
+/*! @brief Returns AlgorithmHint defined during OpenCV compilation. Defines #ALGO_HINT_DEFAULT behavior.
+ */
+CV_EXPORTS_W AlgorithmHint getDefaultAlgorithmHint();
+
 /** @brief Enables or disables the optimized code.
 
 The function can be used to dynamically turn on and off optimized dispatched code (code that uses SSE4.2, AVX/AVX2,
@@ -560,6 +640,8 @@ static inline size_t getElemSize(int type) { return (size_t)CV_ELEM_SIZE(type); 
 /////////////////////////////// Parallel Primitives //////////////////////////////////
 
 /** @brief Base class for parallel data processors
+
+@ingroup core_parallel
 */
 class CV_EXPORTS ParallelLoopBody
 {
@@ -569,18 +651,23 @@ public:
 };
 
 /** @brief Parallel data processor
+
+@ingroup core_parallel
 */
 CV_EXPORTS void parallel_for_(const Range& range, const ParallelLoopBody& body, double nstripes=-1.);
 
-#ifdef CV_CXX11
+//! @ingroup core_parallel
 class ParallelLoopBodyLambdaWrapper : public ParallelLoopBody
 {
 private:
     std::function<void(const Range&)> m_functor;
 public:
-    ParallelLoopBodyLambdaWrapper(std::function<void(const Range&)> functor) :
-        m_functor(functor)
-    { }
+    inline
+    ParallelLoopBodyLambdaWrapper(std::function<void(const Range&)> functor)
+        : m_functor(functor)
+    {
+        // nothing
+    }
 
     virtual void operator() (const cv::Range& range) const CV_OVERRIDE
     {
@@ -588,11 +675,13 @@ public:
     }
 };
 
-inline void parallel_for_(const Range& range, std::function<void(const Range&)> functor, double nstripes=-1.)
+//! @ingroup core_parallel
+static inline
+void parallel_for_(const Range& range, std::function<void(const Range&)> functor, double nstripes=-1.)
 {
     parallel_for_(range, ParallelLoopBodyLambdaWrapper(functor), nstripes);
 }
-#endif
+
 
 /////////////////////////////// forEach method of cv::Mat ////////////////////////////
 template<typename _Tp, typename Functor> inline
@@ -605,6 +694,7 @@ void Mat::forEach_impl(const Functor& operation) {
         //  or (_Tp&, void*)        <- in case you don't need current idx.
     }
 
+    CV_Assert(!empty());
     CV_Assert(this->total() / this->size[this->dims - 1] <= INT_MAX);
     const int LINES = static_cast<int>(this->total() / this->size[this->dims - 1]);
 
@@ -693,90 +783,29 @@ void Mat::forEach_impl(const Functor& operation) {
 
 /////////////////////////// Synchronization Primitives ///////////////////////////////
 
-class CV_EXPORTS Mutex
-{
-public:
-    Mutex();
-    ~Mutex();
-    Mutex(const Mutex& m);
-    Mutex& operator = (const Mutex& m);
-
-    void lock();
-    bool trylock();
-    void unlock();
-
-    struct Impl;
-protected:
-    Impl* impl;
-};
-
-class CV_EXPORTS AutoLock
-{
-public:
-    AutoLock(Mutex& m) : mutex(&m) { mutex->lock(); }
-    ~AutoLock() { mutex->unlock(); }
-protected:
-    Mutex* mutex;
-private:
-    AutoLock(const AutoLock&);
-    AutoLock& operator = (const AutoLock&);
-};
-
-// TLS interface
-class CV_EXPORTS TLSDataContainer
-{
-protected:
-    TLSDataContainer();
-    virtual ~TLSDataContainer();
-
-    void  gatherData(std::vector<void*> &data) const;
-#if OPENCV_ABI_COMPATIBILITY > 300
-    void* getData() const;
-    void  release();
-
-private:
-#else
-    void  release();
-
-public:
-    void* getData() const;
-#endif
-    virtual void* createDataInstance() const = 0;
-    virtual void  deleteDataInstance(void* pData) const = 0;
-
-    int key_;
-
-public:
-    void cleanup(); //! Release created TLS data container objects. It is similar to release() call, but it keeps TLS container valid.
-};
-
-// Main TLS data class
-template <typename T>
-class TLSData : protected TLSDataContainer
-{
-public:
-    inline TLSData()        {}
-    inline ~TLSData()       { release();            } // Release key and delete associated data
-    inline T* get() const   { return (T*)getData(); } // Get data associated with key
-    inline T& getRef() const { T* ptr = (T*)getData(); CV_Assert(ptr); return *ptr; } // Get data associated with key
-
-    // Get data from all threads
-    inline void gather(std::vector<T*> &data) const
-    {
-        std::vector<void*> &dataVoid = reinterpret_cast<std::vector<void*>&>(data);
-        gatherData(dataVoid);
+#if !defined(_M_CEE)
+#ifndef OPENCV_DISABLE_THREAD_SUPPORT
+typedef std::recursive_mutex Mutex;
+typedef std::lock_guard<cv::Mutex> AutoLock;
+#else // OPENCV_DISABLE_THREAD_SUPPORT
+// Custom (failing) implementation of `std::recursive_mutex`.
+struct Mutex {
+    void lock(){
+        CV_Error(cv::Error::StsNotImplemented,
+                 "cv::Mutex is disabled by OPENCV_DISABLE_THREAD_SUPPORT=ON");
     }
-
-    inline void cleanup() { TLSDataContainer::cleanup(); }
-
-private:
-    virtual void* createDataInstance() const CV_OVERRIDE {return new T;}                // Wrapper to allocate data by template
-    virtual void  deleteDataInstance(void* pData) const CV_OVERRIDE {delete (T*)pData;} // Wrapper to release data by template
-
-    // Disable TLS copy operations
-    TLSData(TLSData &) {}
-    TLSData& operator =(const TLSData &) {return *this;}
+    void unlock(){
+        CV_Error(cv::Error::StsNotImplemented,
+                 "cv::Mutex is disabled by OPENCV_DISABLE_THREAD_SUPPORT=ON");
+    }
 };
+// Stub for cv::AutoLock when threads are disabled.
+struct AutoLock {
+    AutoLock(Mutex &) { }
+};
+#endif // OPENCV_DISABLE_THREAD_SUPPORT
+#endif // !defined(_M_CEE)
+
 
 /** @brief Designed for command line parsing
 
@@ -814,7 +843,7 @@ The sample below demonstrates how to use CommandLineParser:
 The keys parameter is a string containing several blocks, each one is enclosed in curly braces and
 describes one argument. Each argument contains three parts separated by the `|` symbol:
 
--# argument names is a space-separated list of option synonyms (to mark argument as positional, prefix it with the `@` symbol)
+-# argument names is a list of option synonyms separated by standard space characters ' ' (to mark argument as positional, prefix it with the `@` symbol)
 -# default value will be used if the argument was not provided (can be empty)
 -# help message (can be empty)
 
@@ -837,6 +866,8 @@ For example:
 Note that there are no default values for `help` and `timestamp` so we can check their presence using the `has()` method.
 Arguments with default values are considered to be always present. Use the `get()` method in these cases to check their
 actual value instead.
+Note that whitespace characters other than standard spaces are considered part of the string.
+Additionally, leading and trailing standard spaces around the help messages are ignored.
 
 String keys like `get<String>("@image1")` return the empty string `""` by default - even with an empty default value.
 Use the special `<none>` default value to enforce that the returned string must not be empty. (like in `get<String>("@image2")`)
@@ -995,8 +1026,8 @@ public:
     void printErrors() const;
 
 protected:
-    void getByName(const String& name, bool space_delete, int type, void* dst) const;
-    void getByIndex(int index, bool space_delete, int type, void* dst) const;
+    void getByName(const String& name, bool space_delete, Param type, void* dst) const;
+    void getByIndex(int index, bool space_delete, Param type, void* dst) const;
 
     struct Impl;
     Impl* impl;
@@ -1105,15 +1136,6 @@ template<typename _Tp, size_t fixed_size> inline size_t
 AutoBuffer<_Tp, fixed_size>::size() const
 { return sz; }
 
-template<> inline std::string CommandLineParser::get<std::string>(int index, bool space_delete) const
-{
-    return get<String>(index, space_delete);
-}
-template<> inline std::string CommandLineParser::get<std::string>(const String& name, bool space_delete) const
-{
-    return get<String>(name, space_delete);
-}
-
 //! @endcond
 
 
@@ -1195,88 +1217,6 @@ public:
     std::vector<Node<OBJECT>*> m_childs;
 };
 
-// Instrumentation external interface
-namespace instr
-{
-
-#if !defined OPENCV_ABI_CHECK
-
-enum TYPE
-{
-    TYPE_GENERAL = 0,   // OpenCV API function, e.g. exported function
-    TYPE_MARKER,        // Information marker
-    TYPE_WRAPPER,       // Wrapper function for implementation
-    TYPE_FUN,           // Simple function call
-};
-
-enum IMPL
-{
-    IMPL_PLAIN = 0,
-    IMPL_IPP,
-    IMPL_OPENCL,
-};
-
-struct NodeDataTls
-{
-    NodeDataTls()
-    {
-        m_ticksTotal = 0;
-    }
-    uint64      m_ticksTotal;
-};
-
-class CV_EXPORTS NodeData
-{
-public:
-    NodeData(const char* funName = 0, const char* fileName = NULL, int lineNum = 0, void* retAddress = NULL, bool alwaysExpand = false, cv::instr::TYPE instrType = TYPE_GENERAL, cv::instr::IMPL implType = IMPL_PLAIN);
-    NodeData(NodeData &ref);
-    ~NodeData();
-    NodeData& operator=(const NodeData&);
-
-    cv::String          m_funName;
-    cv::instr::TYPE     m_instrType;
-    cv::instr::IMPL     m_implType;
-    const char*         m_fileName;
-    int                 m_lineNum;
-    void*               m_retAddress;
-    bool                m_alwaysExpand;
-    bool                m_funError;
-
-    volatile int         m_counter;
-    volatile uint64      m_ticksTotal;
-    TLSData<NodeDataTls> m_tls;
-    int                  m_threads;
-
-    // No synchronization
-    double getTotalMs()   const { return ((double)m_ticksTotal / cv::getTickFrequency()) * 1000; }
-    double getMeanMs()    const { return (((double)m_ticksTotal/m_counter) / cv::getTickFrequency()) * 1000; }
-};
-bool operator==(const NodeData& lhs, const NodeData& rhs);
-
-typedef Node<NodeData> InstrNode;
-
-CV_EXPORTS InstrNode* getTrace();
-
-#endif // !defined OPENCV_ABI_CHECK
-
-
-CV_EXPORTS bool       useInstrumentation();
-CV_EXPORTS void       setUseInstrumentation(bool flag);
-CV_EXPORTS void       resetTrace();
-
-enum FLAGS
-{
-    FLAGS_NONE              = 0,
-    FLAGS_MAPPING           = 0x01,
-    FLAGS_EXPAND_SAME_NAMES = 0x02,
-};
-
-CV_EXPORTS void       setFlags(FLAGS modeFlags);
-static inline void    setFlags(int modeFlags) { setFlags((FLAGS)modeFlags); }
-CV_EXPORTS FLAGS      getFlags();
-
-} // namespace instr
-
 
 namespace samples {
 
@@ -1351,8 +1291,11 @@ CV_EXPORTS int getThreadID();
 
 } //namespace cv
 
-#ifndef DISABLE_OPENCV_24_COMPATIBILITY
-#include "opencv2/core/core_c.h"
+#ifdef CV_COLLECT_IMPL_DATA
+#include "opencv2/core/utils/instrumentation.hpp"
+#else
+/// Collect implementation data on OpenCV function call. Requires ENABLE_IMPL_COLLECTION build option.
+#define CV_IMPL_ADD(impl)
 #endif
 
 #endif //OPENCV_CORE_UTILITY_H

@@ -14,9 +14,9 @@ target_include_directories(UpscalePipelineApp PUBLIC
 
 if(MSVC)
     target_link_libraries(UpscalePipelineApp PUBLIC
-        opencv346
+        opencv4120
         NVVideoEffects
-        ${CMAKE_CURRENT_SOURCE_DIR}/../external/cuda/lib/x64/cudart.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/../external/cuda/lib/arm64/cudart.lib
         )
 
     set(OPENCV_PATH_STR ${CMAKE_CURRENT_SOURCE_DIR}/../external/opencv/bin)

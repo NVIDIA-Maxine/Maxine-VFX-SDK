@@ -222,9 +222,7 @@ NvCV_Status NvVFX_API NvVFX_ResetState(NvVFX_Handle effect, NvVFX_StateObjectHan
 // Filter selectors
 #define NVVFX_FX_TRANSFER               "Transfer"
 #define NVVFX_FX_GREEN_SCREEN           "GreenScreen"         // Green Screen 
-#define NVVFX_FX_BGBLUR                 "BackgroundBlur"     // Background blur
-#define NVVFX_FX_ARTIFACT_REDUCTION     "ArtifactReduction"   // Artifact Reduction  
-#define NVVFX_FX_SUPER_RES              "SuperRes"            // Super Res 
+#define NVVFX_FX_BGBLUR                 "BackgroundBlur"      // Background blur
 #define NVVFX_FX_SR_UPSCALE             "Upscale"             // Super Res Upscale 
 #define NVVFX_FX_DENOISING              "Denoising"           // Denoising 
 
